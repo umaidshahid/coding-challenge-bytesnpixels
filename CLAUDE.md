@@ -14,10 +14,9 @@ code, so this is deliberately explicit.
    TASKS.md, not left for the agent to guess.
 3. **One task, one commit, one verification.** Each task was implemented, typechecked, and
    proven with a live request or test before moving on. Commits are Conventional Commits
-   with short subjects and no AI signature.
+   with short subjects.
 4. **Review the agent, don't trust it.** The agent's output was checked against the command
-   CI actually runs, not just "did the test pass." This caught a `.ts`-extension import the
-   agent wrote that passed under `tsx` but failed `tsc` (see DECISIONS.md).
+   CI actually runs, not just "did the test pass."
 
 ## Conventions for any future agent working here
 
@@ -30,7 +29,7 @@ code, so this is deliberately explicit.
 - **No secrets in the client bundle.** API keys stay server-side. Nothing sensitive in
   `VITE_*` vars.
 - **Don't log tokens or request bodies.** Keep error logs to a message + the error object.
-- **One task per commit**, Conventional Commits, no signature trailer.
+- **One task per commit**, Conventional Commits.
 - **Run the CI commands locally** before claiming done: `npm run typecheck --workspace
   server`, `npm run build --workspace web`, `npm test --workspace server`.
 
@@ -50,6 +49,6 @@ code, so this is deliberately explicit.
 ## Deliverables for this challenge
 
 - `DECISIONS.md` — what changed, what I found, what I deferred, where time went.
-- `KNOWN-ISSUES.md` — what is still broken and the next-day plan.
+- `KNOWN-ISSUES.md` — what is still broken and the 'when there is more time' plan.
 - `PRODUCT-NOTE.md` — the two-week product call.
 - `TASKS.md` — the working plan the agent executed against (the agent trail).

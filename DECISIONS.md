@@ -14,53 +14,80 @@ moving on. Conventional Commits, no squashing, so the history reads as a narrati
 
 ## What I found and fixed
 
-**Security (the headline).** The app authenticated with `jwt.decode()`, which never
-checks the signature, so anyone could forge a token with `role: manager` and be trusted.
-That was the single most important fix (`jwt.verify`, secret from env, fail fast if
-unset). Alongside it: SQL injection in nearly every endpoint (raw string interpolation,
-even though parameterized queries existed elsewhere in the same file), stored XSS via
-`dangerouslySetInnerHTML` on customer-controlled text, CSV formula injection in the
-export, and private internal notes that leaked to every user. The seed data contained
-planted `<strong>` and `=HYPERLINK(...)` payloads, which confirmed these were the
-intended traps. All five are fixed and each has a verification I can demo.
+**Security (the headline).** The seed shipped planted `<strong>` and `=HYPERLINK(...)`
+payloads, which confirmed these were the intended traps. All fixed, each with a
+verification I can demo.
 
-**Correctness.** Pagination was off-by-one (`offset = page * SIZE` with 1-based pages, so
-page 1 silently skipped the first ten rows) and the total count ignored the active
-filter, so the pager was wrong under search. The resolve toggle was a lost-update race:
-the server toggled off its own stored value while the client optimistically set the
-opposite, and a 45-second poller with an empty dependency array held a stale closure that
-overwrote the user's view. I made resolve take an explicit target status (idempotent) and
-fixed the poller's dependencies. The summarize endpoint and LLM client crashed on a bad
-id or any non-200 from the provider; both are now guarded, length-capped, and timed out.
+- **Auth bypass (the big one).** The app used `jwt.decode()`, which never checks the
+  signature, so anyone could forge a token with `role: manager` and be trusted. Switched
+  to `jwt.verify`, secret from env, fail fast if unset.
+- **SQL injection** in nearly every endpoint via raw string interpolation — even though
+  parameterized queries existed elsewhere in the same file. Now all parameterized.
+- **Stored XSS** from `dangerouslySetInnerHTML` on customer-controlled text. Render as
+  text instead.
+- **CSV formula injection** in the export. Risky leading characters are now neutralized.
+- **Private-note leak** — internal notes marked private were returned to every user. Now
+  gated to author + managers.
+- **Plaintext passwords** stored and compared directly. Now bcrypt-hashed (seed + `/login`).
 
-**Hygiene.** Stopped logging tokens and request bodies on error, removed an LLM API key
-that was being plumbed through the browser bundle, stopped returning password columns,
-added input validation and a request-size cap, and added loading/error states so failed
-requests no longer fail silently.
+**Correctness.**
 
-**Infrastructure.** The repo had no deploy story, which fails the "base the team can build
-on" bar. I added a Dockerized API, a Caddy image that serves the built SPA and reverse-
-proxies `/api/*` to the API (same-origin, so CORS is no longer wide open), a docker-compose
-that runs the whole stack with a persistent SQLite volume, and a GitHub Actions pipeline
-that typechecks, builds, runs the smoke tests, and publishes both images to GHCR on
-`master`. I verified this for real: both images build, the API container seeds its volume
-on first boot and skips on restart, and the full stack serves the SPA and proxies the API.
+- **Pagination off-by-one.** `offset = page * SIZE` with 1-based pages silently skipped the
+  first ten rows, and the total count ignored the active filter so the pager was wrong
+  under search. Fixed the offset and counted with the same filter.
+- **Resolve lost-update race.** The server toggled off its own stored value while the
+  client optimistically set the opposite, and a 45-second poller with an empty dependency
+  array held a stale closure that overwrote the user's view. Made resolve take an explicit
+  target status (idempotent) and fixed the poller's dependencies.
+- **Summarize crashes.** The endpoint and LLM client threw on a bad id or any non-200 from
+  the provider. Both are now guarded, length-capped, and timed out.
+
+**Hygiene.**
+
+- Stopped logging tokens and request bodies on error.
+- Removed an LLM API key that was being plumbed through the browser bundle.
+- Stopped returning password columns from the API.
+- Added input validation and a request-size cap on writes.
+- Added loading/error states so failed requests no longer fail silently.
+
+**Scalability & reliability.** The cheap, high-value wins; the deeper single-node SQLite
+ceiling I left as a deliberate boundary (documented in KNOWN-ISSUES with its migration
+path).
+
+- **Indexes.** The schema had none, so every status filter, customer lookup, and notes join
+  was a full table scan — invisible at 80 rows, linear at 100k, and especially bad because
+  `better-sqlite3` is synchronous and a slow scan blocks the whole process. Added composite
+  and foreign-key indexes on the hot paths; confirmed with `EXPLAIN QUERY PLAN` that the
+  inbox query searches an index instead of scanning.
+- **Rate limiting.** A loose global cap plus tighter limits on `/login` (brute-force) and
+  `/summarize` (LLM cost), verified by watching `/login` return 429 past its threshold.
+
+**Infrastructure.** The project had no deploy sequence, which fails the "shippable" bar. 
+So, for production: both images build, the API container seeds its volume on first
+boot and skips on restart, and the full stack serves the SPA and proxies the API.
+
+- **Dockerized API** with a multi-stage build.
+- **Caddy image** that serves the built SPA and reverse-proxies `/api/*` to the API
+  (same-origin, so CORS is no longer wide open).
+- **docker-compose** running the whole stack with a persistent SQLite volume.
+- **GitHub Actions** that typechecks, builds, runs the smoke tests, and publishes both
+  images to GHCR on `master`.
 
 ## What I chose not to touch, and why
 
-- **Password hashing.** Passwords are still plaintext in the seed. Doing this properly
-  (hashing, a signup/credential flow, migrating seed data) is a larger change than the
-  budget allowed and is not what the demo turns on. I did the cheap half (stop exposing
-  password columns) and flagged the rest loudly in KNOWN-ISSUES.
+- **Full credential flow.** Passwords are hashed and password columns are no longer
+  exposed, but I deliberately stopped short of building signup, password reset, and
+  change-password flows or a strength policy. The hashing is the part that mattered for
+  a breach; the flows are feature work that can sit on top of it.
 - **Role-based authorization.** Authentication is now sound; authorization beyond it
   (who may resolve, export, reassign) is deferred. The one place it mattered for a data
   leak, private notes, I did gate (author + managers).
-- **A broad test suite.** I wrote three high-value smoke tests (forged-token rejection,
-  pagination, SQLi) so CI runs something meaningful and the regressions I care most about
-  are pinned. A full unit/integration/e2e suite is an extended task.
 - **The web interface** The UI in my opinion is pretty obscene and just pure bad. But 'shippable' 
   can be argued as bug-free and infrastructural if it is time sensitive and for staging/beta version. 
   The very next thing would be revamping UI top to bottom.
+- **A broad test suite.** I wrote three high-value smoke tests (forged-token rejection,
+  pagination, SQLi) so CI runs something meaningful and the regressions I care most about
+  are pinned. A full unit/integration/e2e suite is an extended task.
 
 ## Where the time went
 
