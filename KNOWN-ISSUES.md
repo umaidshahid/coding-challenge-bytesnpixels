@@ -1,6 +1,6 @@
 # Known Issues
 
-What is still broken or weak, and what I would do about it with another day. Ordered
+What is still broken or weak, and what I would do about it with more time. Ordered
 roughly by priority.
 
 ## Security / auth
@@ -58,6 +58,3 @@ roughly by priority.
   correct volume ownership.
 - **No healthchecks or observability.** Compose has no healthcheck and there is no
   structured logging, metrics, or request tracing.
-- **GHCR push is untested end-to-end.** The workflow is written and the image builds
-  locally, but the publish job only runs on a real push to `master` with packages
-  permission. Worth confirming on first push.

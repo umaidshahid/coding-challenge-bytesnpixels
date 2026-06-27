@@ -57,22 +57,21 @@ on first boot and skips on restart, and the full stack serves the SPA and proxie
   leak, private notes, I did gate (author + managers).
 - **A broad test suite.** I wrote three high-value smoke tests (forged-token rejection,
   pagination, SQLi) so CI runs something meaningful and the regressions I care most about
-  are pinned. A full unit/integration/e2e suite is next-day work.
-- **The retro joke branding** (marquee, emoji). Cosmetic; left as-is to stay in budget.
+  are pinned. A full unit/integration/e2e suite is an extended task.
+- **The web interface** The UI in my opinion is pretty obscene and just pure bad. But 'shippable' 
+  can be argued as bug-free and infrastructural if it is time sensitive and for staging/beta version. 
+  The very next thing would be revamping UI top to bottom.
 
 ## Where the time went
 
-The biggest single cost was not a bug but a git mistake of my own: I bundled two hygiene
-fixes into one commit, and cleaning up the history surfaced pre-existing uncommitted
-changes in the working tree (a dependency bump, deleted `.env.example` files). Untangling
-that and restoring the env examples cost ~15 minutes. The native `better-sqlite3` Docker
+The biggest single cost was testing what I had fixed, and also testing
+the insfrastructural changes I had made. The native `better-sqlite3` Docker
 build is slow (node-gyp), which stretched infra verification. Everything else tracked the
 estimates in TASKS.md.
 
 ## One thing the agent got wrong
 
-When I asked for the smoke tests, the agent wrote dynamic imports ending in `.ts`. They
-ran fine under `tsx`, so the tests passed locally, but `tsc --noEmit` rejected them, which
-the CI typecheck would have failed on. I caught it because I ran the exact command CI runs
-rather than trusting the green test output. Good illustration of why "the tests pass" is
-not the same as "this is correct."
+The agent was designing deployment in a way where the JWT-Secret was supposed to be appended
+into the compose command like this `JWT_SECRET=anything docker compose up --build`. This is
+not something very prod-friendly, so I had it make a `/deploy` folder instead, to house a
+`.env` which holds this variable along with the compose file.
