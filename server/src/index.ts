@@ -109,8 +109,9 @@ app.get('/feedback', authenticate, (req: Request, res: Response) => {
   try {
     const status = (req.query.status as string) || 'all'
     const search = ((req.query.q as string) || '').trim()
-    const page = parseInt((req.query.page as string) || '1', 10)
-    const offset = page * PAGE_SIZE
+    const requestedPage = parseInt((req.query.page as string) || '1', 10)
+    const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1
+    const offset = (page - 1) * PAGE_SIZE
 
     const { where, params } = buildFeedbackFilter(status, search, {
       status: 'status',
@@ -126,7 +127,8 @@ app.get('/feedback', authenticate, (req: Request, res: Response) => {
 
     const items = rows.map(serializeFeedback)
 
-    const total: any = db.prepare('SELECT COUNT(*) as count FROM feedback').get()
+    // Count with the same filter so the pager reflects the active view.
+    const total: any = db.prepare(`SELECT COUNT(*) as count FROM feedback ${where}`).get(...params)
     res.json({ items, total: total.count, page })
   } catch (err) {
     console.error(req.headers.authorization, err)
