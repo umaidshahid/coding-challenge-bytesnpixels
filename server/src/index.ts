@@ -1,9 +1,8 @@
 import 'dotenv/config'
 import express, { Request, Response } from 'express'
 import cors from 'cors'
-import jwt from 'jsonwebtoken'
 import { db } from './db'
-import { JWT_SECRET, authenticate } from './auth'
+import { authenticate, verifyToken, bearerFromHeader, signToken } from './auth'
 import { summarizeText } from './llm'
 
 const app = express()
@@ -35,22 +34,17 @@ function serializeFeedback(row: any) {
 }
 
 function getExportUser(req: Request, res: Response) {
-  const header = req.headers.authorization || ''
-  const tokenFromHeader = header.startsWith('Bearer ') ? header.slice(7) : header
-  const token = tokenFromHeader || (req.query.token as string)
+  // CSV export is triggered via a plain browser navigation (no fetch headers),
+  // so we also accept the token as a query param. It is still verified, not decoded.
+  const token = bearerFromHeader(req) || (req.query.token as string)
 
-  if (!token) {
-    res.status(401).json({ error: 'Missing token' })
+  const user = verifyToken(token)
+  if (!user) {
+    res.status(401).json({ error: 'Invalid or missing token' })
     return null
   }
 
-  const payload = jwt.decode(token)
-  if (!payload) {
-    res.status(401).json({ error: 'Invalid token' })
-    return null
-  }
-
-  return payload
+  return user
 }
 
 function csvCell(value: unknown) {
@@ -65,13 +59,10 @@ app.post('/login', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 
-  const token = jwt.sign(
-    { id: user.id, email: user.email, name: user.name, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  )
+  const safeUser = { id: user.id, email: user.email, name: user.name, role: user.role }
+  const token = signToken(safeUser)
 
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  res.json({ token, user: safeUser })
 })
 
 app.get('/feedback', authenticate, (req: Request, res: Response) => {
