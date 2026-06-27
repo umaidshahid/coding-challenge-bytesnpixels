@@ -1,8 +1,10 @@
+# Deployment compose: runs the images published to GHCR by CI.
+# Pin a specific tag with IMAGE_TAG (defaults to latest).
+# For local building instead of pulling, layer the dev override:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 services:
   api:
-    build:
-      context: ..
-      dockerfile: server/Dockerfile
+    image: ghcr.io/umaidshahid/coding-challenge-bytesnpixels/api:${IMAGE_TAG:-latest}
     environment:
       # Provide a real secret in a .env file or your deployment environment.
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in your environment}
@@ -15,9 +17,7 @@ services:
     restart: unless-stopped
 
   proxy:
-    build:
-      context: ..
-      dockerfile: web/Dockerfile
+    image: ghcr.io/umaidshahid/coding-challenge-bytesnpixels/proxy:${IMAGE_TAG:-latest}
     environment:
       # Set to your domain (e.g. pulse.example.com) for automatic HTTPS.
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}

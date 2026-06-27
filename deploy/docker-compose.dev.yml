@@ -1,0 +1,35 @@
+# Local-build compose: builds the images from the working tree instead of
+# pulling them from GHCR. Use this for local development and testing:
+#   docker compose -f deploy/docker-compose.dev.yml up --build
+#
+# The published-image equivalent for deployment is docker-compose.yml.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in your environment}
+      FAKE_LLM: ${FAKE_LLM:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      PULSE_DB_PATH: /data/pulse.db
+      PORT: 4000
+    volumes:
+      - pulse-data:/data
+    restart: unless-stopped
+
+  proxy:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${PROXY_PORT:-8080}:80"
+      - "443:443"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pulse-data:

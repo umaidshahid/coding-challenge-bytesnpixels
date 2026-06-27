@@ -43,7 +43,8 @@ code, so this is deliberately explicit.
   - `src/index.test.ts` — smoke tests (node:test + supertest).
 - `web/` — React + TypeScript SPA (Vite). `src/api.ts` is the single fetch layer.
 - `server/Dockerfile`, `web/Dockerfile` (Caddy) — images.
-- `deploy/docker-compose.yml`, `deploy/.env.example` — deploy stack and its environment.
+- `deploy/docker-compose.yml` (pulls GHCR images), `deploy/docker-compose.dev.yml` (builds
+  locally), `deploy/.env.example` — deploy stack and its environment.
 - `.github/workflows/ci.yml` — typecheck, build, test, publish to GHCR.
 
 ## Deliverables for this challenge

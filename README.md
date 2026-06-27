@@ -61,22 +61,38 @@ Open the web app in your browser and sign in.
 ## Run with Docker
 
 A production-style stack runs the API behind a Caddy reverse proxy that also serves the
-built web app. Caddy proxies `/api/*` to the API, so the app is same-origin. The compose
-file and its environment live in `deploy/`.
+built web app. Caddy proxies `/api/*` to the API, so the app is same-origin. Both compose
+files and the environment live in `deploy/`.
+
+First create the env file (compose reads it automatically, so no secrets on the command
+line):
 
 ```bash
 cp deploy/.env.example deploy/.env   # then edit JWT_SECRET
-docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Compose reads `deploy/.env` automatically, so no secrets go on the command line. Then open
-http://localhost:8080. The API database is seeded automatically on first boot and
-persisted in the `pulse-data` volume. Variables (see `deploy/.env.example`):
+**Local build** — from root, build the images:
+
+```bash
+cd deploy
+docker compose -f deploy/docker-compose.dev.yml up --build
+```
+
+**Deploy** — pull the images CI published to GHCR (`docker-compose.yml`). Pin a tag with
+`IMAGE_TAG`, or use the default `latest`:
+
+```bash
+docker compose -f deploy/docker-compose.yml up
+```
+
+Then open http://localhost:8080. The API database is seeded automatically on first boot
+and persisted in the `pulse-data` volume. Variables (see `deploy/.env.example`):
 
 - `JWT_SECRET` (required) — signing secret for auth tokens.
 - `PROXY_PORT` (default `8080`) — host port for the proxy.
 - `SITE_ADDRESS` — set to a domain (e.g. `pulse.example.com`) for automatic HTTPS.
 - `FAKE_LLM` (default `true`) / `OPENAI_API_KEY` — live summaries.
+- `IMAGE_TAG` (default `latest`) — which published image tag to deploy (GHCR stack only).
 
 ## Project layout
 
