@@ -35,10 +35,18 @@ export async function fetchItem(id: number, token: string): Promise<FeedbackItem
   return res.json()
 }
 
-export async function toggleResolve(id: number, token: string): Promise<FeedbackItem> {
+export async function setResolved(
+  id: number,
+  status: 'open' | 'resolved',
+  token: string
+): Promise<FeedbackItem> {
   const res = await fetch(`${API_URL}/feedback/${id}/resolve`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status }),
   })
   return res.json()
 }

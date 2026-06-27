@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { exportFeedbackUrl, fetchInbox, fetchMetrics, toggleResolve } from '../api'
+import { exportFeedbackUrl, fetchInbox, fetchMetrics, setResolved } from '../api'
 import { FeedbackItem, Metrics } from '../types'
 import ItemDetail from './ItemDetail'
 
@@ -28,22 +28,27 @@ export default function Inbox({ token }: { token: string }) {
     fetchMetrics(token).then(setMetrics)
   }, [token])
 
+  // Poll the current view for new feedback. Depending on the active inputs
+  // avoids the stale-closure bug where the interval kept refetching page 1 of
+  // the unfiltered list and overwrote the user's view. Server status is
+  // authoritative now that resolve sends an explicit target, so no merge.
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const data = await fetchInbox(page, filter, search, token)
-      const merged = data.items.map((incoming) => {
-        const local = items.find((it) => it.id === incoming.id)
-        return local ? { ...incoming, status: local.status } : incoming
-      })
-      setItems(merged)
-    }, 45000)
+    const interval = setInterval(load, 45000)
     return () => clearInterval(interval)
-  }, [])
+  }, [page, filter, search, token])
 
   const onResolve = async (item: FeedbackItem) => {
     const nextStatus = item.status === 'open' ? 'resolved' : 'open'
-    setItems(items.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it)))
-    await toggleResolve(item.id, token)
+    setItems((prev) =>
+      prev.map((it) => (it.id === item.id ? { ...it, status: nextStatus } : it))
+    )
+    try {
+      const updated = await setResolved(item.id, nextStatus, token)
+      setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, status: updated.status } : it)))
+    } catch {
+      // Revert the optimistic update if the request failed.
+      setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, status: item.status } : it)))
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))

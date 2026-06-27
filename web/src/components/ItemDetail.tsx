@@ -6,7 +6,7 @@ import {
   fetchNotes,
   fetchUsers,
   summarize,
-  toggleResolve,
+  setResolved,
   updateAssignment,
 } from '../api'
 import { CustomerProfile, FeedbackItem, InternalNote, User } from '../types'
@@ -63,7 +63,8 @@ export default function ItemDetail({
 
   const onResolve = async () => {
     if (!item) return
-    const updated = await toggleResolve(item.id, token)
+    const nextStatus = item.status === 'open' ? 'resolved' : 'open'
+    const updated = await setResolved(item.id, nextStatus, token)
     setItem({ ...item, status: updated.status })
   }
 

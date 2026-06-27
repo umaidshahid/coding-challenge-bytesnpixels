@@ -326,7 +326,16 @@ app.post('/feedback/:id/resolve', authenticate, (req: Request, res: Response) =>
     if (!row) {
       return res.status(404).json({ error: 'Not found' })
     }
-    const nextStatus = row.status === 'open' ? 'resolved' : 'open'
+    // Prefer an explicit target status so the call is idempotent and immune to
+    // races (two clicks, or a retry, can't flip the value back). Fall back to a
+    // toggle only when no status is supplied.
+    const requested = req.body?.status
+    const nextStatus =
+      requested === 'open' || requested === 'resolved'
+        ? requested
+        : row.status === 'open'
+          ? 'resolved'
+          : 'open'
     db.prepare('UPDATE feedback SET status = ? WHERE id = ?').run(nextStatus, req.params.id)
     res.json({ ...row, status: nextStatus })
   } catch (err) {
