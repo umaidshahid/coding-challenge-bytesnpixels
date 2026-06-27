@@ -20,8 +20,8 @@ function serializeFeedback(row: any) {
   return {
     id: row.id,
     customer_id: row.customer_id,
-    customer_name: customer.name,
-    customer_email: customer.email,
+    customer_name: customer?.name ?? 'Unknown customer',
+    customer_email: customer?.email ?? null,
     channel: row.channel,
     message: row.message,
     status: row.status,
