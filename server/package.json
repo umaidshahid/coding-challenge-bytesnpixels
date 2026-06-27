@@ -12,6 +12,7 @@
     "test": "node --import tsx --test src/index.test.ts"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs'
 import { db } from './db'
 
 db.exec(`
@@ -52,7 +53,9 @@ const users = [
 
 const insertUser = db.prepare('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)')
 for (const u of users) {
-  insertUser.run(u.email, u.password, u.name, u.role)
+  // Store a bcrypt hash, never the plaintext password.
+  const passwordHash = bcrypt.hashSync(u.password, 10)
+  insertUser.run(u.email, passwordHash, u.name, u.role)
 }
 
 const customers = [

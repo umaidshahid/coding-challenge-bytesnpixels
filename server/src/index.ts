@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express, { Request, Response } from 'express'
 import cors from 'cors'
+import bcrypt from 'bcryptjs'
 import { db } from './db'
 import { authenticate, verifyToken, bearerFromHeader, signToken, AuthUser } from './auth'
 import { summarizeText } from './llm'
@@ -109,11 +110,13 @@ function buildFeedbackFilter(
   return { where, params }
 }
 
-app.post('/login', (req: Request, res: Response) => {
+app.post('/login', async (req: Request, res: Response) => {
   const { email, password } = req.body
   const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
 
-  if (!user || user.password !== password) {
+  const passwordOk =
+    typeof password === 'string' && user && (await bcrypt.compare(password, user.password))
+  if (!passwordOk) {
     return res.status(401).json({ error: 'Invalid email or password' })
   }
 
