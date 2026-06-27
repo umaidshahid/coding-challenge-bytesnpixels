@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { db } from './db'
-import { authenticate, verifyToken, bearerFromHeader, signToken } from './auth'
+import { authenticate, verifyToken, bearerFromHeader, signToken, AuthUser } from './auth'
 import { summarizeText } from './llm'
 
 const app = express()
@@ -276,15 +276,21 @@ app.post('/feedback/:id/assignment', authenticate, (req: Request, res: Response)
 })
 
 app.get('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
+  const user = (req as any).user as AuthUser
+  // A private note is visible only to its author and to managers; everyone
+  // else sees just the shared notes. Filtered in SQL so private bodies never
+  // leave the database for unauthorized callers.
+  const isManager = user.role === 'manager'
   const notes = db
     .prepare(
       `SELECT n.*, u.name as author_name, u.email as author_email
        FROM feedback_notes n
        LEFT JOIN users u ON u.id = n.author_id
        WHERE n.feedback_id = ?
+         AND (n.is_private = 0 OR ? = 1 OR n.author_id = ?)
        ORDER BY n.created_at DESC`
     )
-    .all(req.params.id)
+    .all(req.params.id, isManager ? 1 : 0, user.id)
   res.json({ notes })
 })
 
