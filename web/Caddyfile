@@ -1,0 +1,20 @@
+# Pulse reverse proxy.
+#
+# Listens on :80 by default. Set the SITE_ADDRESS env var to a real domain
+# (e.g. pulse.example.com) and Caddy will provision HTTPS automatically.
+{$SITE_ADDRESS::80} {
+	encode gzip
+
+	# API requests: strip the /api prefix and forward to the server container.
+	# The server routes live at the root (/login, /feedback, ...).
+	handle_path /api/* {
+		reverse_proxy api:4000
+	}
+
+	# Everything else is the single-page app, with history-mode fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
