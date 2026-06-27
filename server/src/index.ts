@@ -48,7 +48,14 @@ function getExportUser(req: Request, res: Response) {
 }
 
 function csvCell(value: unknown) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
+  let str = String(value ?? '')
+  // Defuse spreadsheet formula injection: a cell starting with = + - @ (or a
+  // control char that some parsers strip to reveal one) is executed as a
+  // formula by Excel/Sheets. Prefix with a single quote so it stays literal.
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`
+  }
+  return `"${str.replace(/"/g, '""')}"`
 }
 
 // Build a parameterized WHERE clause for the feedback list / export filters.
