@@ -131,13 +131,13 @@ app.get('/feedback', authenticate, (req: Request, res: Response) => {
     const total: any = db.prepare(`SELECT COUNT(*) as count FROM feedback ${where}`).get(...params)
     res.json({ items, total: total.count, page })
   } catch (err) {
-    console.error(req.headers.authorization, err)
+    console.error('GET /feedback failed', err)
     res.status(500).json({ error: 'Something went wrong' })
   }
 })
 
-app.get('/users', authenticate, (req: Request, res: Response) => {
-  const users = db.prepare('SELECT * FROM users ORDER BY name').all()
+app.get('/users', authenticate, (_req: Request, res: Response) => {
+  const users = db.prepare('SELECT id, email, name, role FROM users ORDER BY name').all()
   res.json({ users })
 })
 
@@ -272,7 +272,7 @@ app.post('/feedback/:id/assignment', authenticate, (req: Request, res: Response)
 
     res.json(serializeFeedback(row))
   } catch (err) {
-    console.error(req.body, err)
+    console.error('POST /feedback/:id/assignment failed', err)
     res.status(500).json({ error: 'Something went wrong' })
   }
 })
