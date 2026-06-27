@@ -13,11 +13,21 @@ export default function Inbox({ token }: { token: string }) {
   const [search, setSearch] = useState('')
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const load = async () => {
-    const data = await fetchInbox(page, filter, search, token)
-    setItems(data.items)
-    setTotal(data.total)
+    setLoading(true)
+    setError('')
+    try {
+      const data = await fetchInbox(page, filter, search, token)
+      setItems(data.items)
+      setTotal(data.total)
+    } catch {
+      setError('Could not load feedback. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -122,6 +132,12 @@ export default function Inbox({ token }: { token: string }) {
         </button>
       </div>
 
+      {error && (
+        <div className="error" role="alert">
+          {error} <button className="link-button" onClick={load}>Retry</button>
+        </div>
+      )}
+
       <table className="feedback-table">
         <thead>
           <tr>
@@ -136,6 +152,16 @@ export default function Inbox({ token }: { token: string }) {
           </tr>
         </thead>
         <tbody>
+          {loading && items.length === 0 && (
+            <tr>
+              <td colSpan={8} className="table-empty">Loading…</td>
+            </tr>
+          )}
+          {!loading && !error && items.length === 0 && (
+            <tr>
+              <td colSpan={8} className="table-empty">No feedback matches this view.</td>
+            </tr>
+          )}
           {items.map((item) => (
             <tr key={item.id} className="row" onClick={() => setSelectedId(item.id)}>
               <td>{item.customer_name}</td>

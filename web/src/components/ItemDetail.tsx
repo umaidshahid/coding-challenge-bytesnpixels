@@ -25,6 +25,8 @@ export default function ItemDetail({
   const [customer, setCustomer] = useState<CustomerProfile | null>(null)
   const [notes, setNotes] = useState<InternalNote[]>([])
   const [summary, setSummary] = useState('')
+  const [summarizing, setSummarizing] = useState(false)
+  const [summaryError, setSummaryError] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
   const [priority, setPriority] = useState('normal')
   const [dueAt, setDueAt] = useState('')
@@ -69,10 +71,16 @@ export default function ItemDetail({
   }
 
   const onSummarize = async () => {
+    setSummarizing(true)
+    setSummaryError('')
     try {
       const data = await summarize(id, token)
       setSummary(data.summary)
-    } catch (e) {}
+    } catch {
+      setSummaryError('Could not generate a summary right now.')
+    } finally {
+      setSummarizing(false)
+    }
   }
 
   const onSaveAssignment = async () => {
@@ -158,10 +166,15 @@ export default function ItemDetail({
             <button onClick={onResolve}>
               {item.status === 'open' ? 'Mark resolved' : 'Reopen'}
             </button>
-            <button className="secondary" onClick={onSummarize}>
-              Summarize
+            <button className="secondary" onClick={onSummarize} disabled={summarizing}>
+              {summarizing ? 'Summarizing…' : 'Summarize'}
             </button>
           </div>
+          {summaryError && (
+            <div className="error" role="alert">
+              {summaryError}
+            </div>
+          )}
           {summary && (
             <div className="summary">
               <h3>Summary</h3>

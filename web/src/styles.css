@@ -177,6 +177,12 @@ button {
   animation: wiggle 0.3s linear infinite;
 }
 
+.table-empty {
+  text-align: center;
+  padding: 24px;
+  color: #666;
+}
+
 .error {
   color: #fff;
   background: #ff0000;

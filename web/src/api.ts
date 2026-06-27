@@ -1,6 +1,23 @@
 import { API_URL } from './config'
 import { CustomerProfile, FeedbackItem, InternalNote, Metrics, User } from './types'
 
+// Single fetch wrapper so every call fails loudly (throws) on a non-2xx
+// response instead of silently returning an error body as if it were data.
+async function request<T>(path: string, token: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    ...(init.headers as Record<string, string>),
+    Authorization: `Bearer ${token}`,
+  }
+  if (init.body) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const res = await fetch(`${API_URL}${path}`, { ...init, headers })
+  if (!res.ok) {
+    throw new Error(`Request to ${path} failed with status ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
 export async function login(
   email: string,
   password: string
@@ -16,113 +33,77 @@ export async function login(
   return res.json()
 }
 
-export async function fetchInbox(
+export function fetchInbox(
   page: number,
   status: string,
   search: string,
   token: string
 ): Promise<{ items: FeedbackItem[]; total: number; page: number }> {
-  const res = await fetch(`${API_URL}/feedback?page=${page}&status=${status}&q=${search}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+  const params = new URLSearchParams({ page: String(page), status, q: search })
+  return request(`/feedback?${params.toString()}`, token)
 }
 
-export async function fetchItem(id: number, token: string): Promise<FeedbackItem> {
-  const res = await fetch(`${API_URL}/feedback/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchItem(id: number, token: string): Promise<FeedbackItem> {
+  return request(`/feedback/${id}`, token)
 }
 
-export async function setResolved(
+export function setResolved(
   id: number,
   status: 'open' | 'resolved',
   token: string
 ): Promise<FeedbackItem> {
-  const res = await fetch(`${API_URL}/feedback/${id}/resolve`, {
+  return request(`/feedback/${id}/resolve`, token, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify({ status }),
   })
-  return res.json()
 }
 
-export async function fetchUsers(token: string): Promise<{ users: User[] }> {
-  const res = await fetch(`${API_URL}/users`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchUsers(token: string): Promise<{ users: User[] }> {
+  return request('/users', token)
 }
 
-export async function fetchMetrics(token: string): Promise<Metrics> {
-  const res = await fetch(`${API_URL}/metrics`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchMetrics(token: string): Promise<Metrics> {
+  return request('/metrics', token)
 }
 
 export function exportFeedbackUrl(status: string, search: string, token: string) {
-  return `${API_URL}/export.csv?status=${status}&q=${search}&token=${token}`
+  const params = new URLSearchParams({ status, q: search, token })
+  return `${API_URL}/export.csv?${params.toString()}`
 }
 
-export async function fetchCustomer(id: number, token: string): Promise<CustomerProfile> {
-  const res = await fetch(`${API_URL}/customers/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchCustomer(id: number, token: string): Promise<CustomerProfile> {
+  return request(`/customers/${id}`, token)
 }
 
-export async function updateAssignment(
+export function updateAssignment(
   id: number,
   data: { assignee_id: number | null; priority: string; due_at: string },
   token: string
 ): Promise<FeedbackItem> {
-  const res = await fetch(`${API_URL}/feedback/${id}/assignment`, {
+  return request(`/feedback/${id}/assignment`, token, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(data),
   })
-  return res.json()
 }
 
-export async function fetchNotes(id: number, token: string): Promise<{ notes: InternalNote[] }> {
-  const res = await fetch(`${API_URL}/feedback/${id}/notes`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  return res.json()
+export function fetchNotes(id: number, token: string): Promise<{ notes: InternalNote[] }> {
+  return request(`/feedback/${id}/notes`, token)
 }
 
-export async function addNote(
+export function addNote(
   id: number,
   data: { body: string; is_private: boolean },
   token: string
 ): Promise<InternalNote> {
-  const res = await fetch(`${API_URL}/feedback/${id}/notes`, {
+  return request(`/feedback/${id}/notes`, token, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(data),
   })
-  return res.json()
 }
 
-export async function summarize(id: number, token: string): Promise<{ summary: string }> {
-  const res = await fetch(`${API_URL}/summarize`, {
+export function summarize(id: number, token: string): Promise<{ summary: string }> {
+  return request('/summarize', token, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify({ id }),
   })
-  return res.json()
 }
