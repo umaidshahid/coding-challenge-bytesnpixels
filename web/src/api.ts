@@ -1,4 +1,4 @@
-import { API_URL, LLM_API_KEY } from './config'
+import { API_URL } from './config'
 import { CustomerProfile, FeedbackItem, InternalNote, Metrics, User } from './types'
 
 export async function login(
@@ -121,7 +121,6 @@ export async function summarize(id: number, token: string): Promise<{ summary: s
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
-      'x-llm-key': LLM_API_KEY,
     },
     body: JSON.stringify({ id }),
   })
