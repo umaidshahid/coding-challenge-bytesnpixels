@@ -6,7 +6,15 @@ import { authenticate, verifyToken, bearerFromHeader, signToken, AuthUser } from
 import { summarizeText } from './llm'
 
 const app = express()
-app.use(cors())
+
+// Restrict CORS to an explicit allowlist. Behind the bundled reverse proxy the
+// app is same-origin and needs no CORS at all; CORS_ORIGINS only matters when
+// the API is reached directly (e.g. local dev with the Vite server).
+const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+app.use(cors({ origin: corsOrigins }))
 app.use(express.json({ limit: '100kb' }))
 
 const PAGE_SIZE = 10
@@ -391,7 +399,13 @@ app.post('/summarize', authenticate, async (req: Request, res: Response) => {
   }
 })
 
-const PORT = process.env.PORT || 4000
-app.listen(PORT, () => {
-  console.log(`Pulse API running on http://localhost:${PORT}`)
-})
+export { app }
+
+// Only start listening when run directly, so tests can import the app without
+// binding a port.
+if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+  const PORT = process.env.PORT || 4000
+  app.listen(PORT, () => {
+    console.log(`Pulse API running on http://localhost:${PORT}`)
+  })
+}
