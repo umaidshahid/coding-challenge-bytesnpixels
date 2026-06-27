@@ -7,7 +7,7 @@ import { summarizeText } from './llm'
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '100kb' }))
 
 const PAGE_SIZE = 10
 
@@ -56,6 +56,16 @@ function csvCell(value: unknown) {
     str = `'${str}`
   }
   return `"${str.replace(/"/g, '""')}"`
+}
+
+const PRIORITIES = ['low', 'normal', 'high', 'urgent']
+const NOTE_MAX_LENGTH = 5000
+
+// Accept ISO-8601 dates (full timestamp or yyyy-mm-dd) or empty/absent.
+function isValidDueAt(value: unknown): boolean {
+  if (value == null || value === '') return true
+  if (typeof value !== 'string') return false
+  return !Number.isNaN(Date.parse(value))
 }
 
 // Build a parameterized WHERE clause for the feedback list / export filters.
@@ -261,9 +271,20 @@ app.get('/feedback/:id', authenticate, (req: Request, res: Response) => {
 app.post('/feedback/:id/assignment', authenticate, (req: Request, res: Response) => {
   try {
     const { assignee_id, priority, due_at } = req.body
+
+    if (!PRIORITIES.includes(priority)) {
+      return res.status(400).json({ error: 'Invalid priority' })
+    }
+    if (assignee_id != null && !Number.isInteger(assignee_id)) {
+      return res.status(400).json({ error: 'Invalid assignee_id' })
+    }
+    if (!isValidDueAt(due_at)) {
+      return res.status(400).json({ error: 'Invalid due_at' })
+    }
+
     db.prepare(
       `UPDATE feedback SET assignee_id = ?, priority = ?, due_at = ? WHERE id = ?`
-    ).run(assignee_id ?? null, priority, due_at ?? null, req.params.id)
+    ).run(assignee_id ?? null, priority, due_at || null, req.params.id)
 
     const row: any = db.prepare('SELECT * FROM feedback WHERE id = ?').get(req.params.id)
     if (!row) {
@@ -299,10 +320,17 @@ app.get('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
 app.post('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
   try {
     const user = (req as any).user
+    const body = typeof req.body.body === 'string' ? req.body.body.trim() : ''
+    if (!body) {
+      return res.status(400).json({ error: 'Note body is required' })
+    }
+    if (body.length > NOTE_MAX_LENGTH) {
+      return res.status(400).json({ error: 'Note is too long' })
+    }
     const createdAt = new Date().toISOString()
     db.prepare(
       'INSERT INTO feedback_notes (feedback_id, author_id, body, is_private, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(req.params.id, user.id, req.body.body, req.body.is_private ? 1 : 0, createdAt)
+    ).run(req.params.id, user.id, body, req.body.is_private ? 1 : 0, createdAt)
 
     const note: any = db
       .prepare(
