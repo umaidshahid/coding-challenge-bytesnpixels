@@ -32,6 +32,10 @@ customer profile history, internal notes, a small metrics panel, search, and CSV
    The defaults run the app fully offline — the Summarize feature uses a built-in canned
    summarizer (`FAKE_LLM=true`), so no API key is required.
 
+   The server requires `JWT_SECRET` to be set and will refuse to start without it. The
+   example file ships a development value; replace it with a real secret in any shared or
+   production environment.
+
 3. Seed the database with sample users, customers, and feedback:
 
    ```bash
@@ -54,10 +58,29 @@ Open the web app in your browser and sign in.
 - **Email:** `alice@pulse.test`
 - **Password:** `password123`
 
+## Run with Docker
+
+A production-style stack runs the API behind a Caddy reverse proxy that also serves the
+built web app. Caddy proxies `/api/*` to the API, so the app is same-origin.
+
+```bash
+JWT_SECRET=choose-a-real-secret docker compose up --build
+```
+
+Then open http://localhost:8080. The API database is seeded automatically on first boot
+and persisted in the `pulse-data` volume. Useful variables:
+
+- `JWT_SECRET` (required) — signing secret for auth tokens.
+- `PROXY_PORT` (default `8080`) — host port for the proxy.
+- `SITE_ADDRESS` — set to a domain (e.g. `pulse.example.com`) for automatic HTTPS.
+- `FAKE_LLM` (default `true`) / `OPENAI_API_KEY` — live summaries.
+
 ## Project layout
 
 - `server/` — Node + Express + TypeScript API backed by SQLite (`better-sqlite3`).
 - `web/` — React + TypeScript single-page app built with Vite.
+- `docker-compose.yml`, `server/Dockerfile`, `web/Dockerfile` — containerized stack.
+- `.github/workflows/ci.yml` — CI: typecheck, build, test, and publish images to GHCR.
 
 ## Optional: live summaries
 
