@@ -51,6 +51,39 @@ function csvCell(value: unknown) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
 
+// Build a parameterized WHERE clause for the feedback list / export filters.
+// `cols` lets callers map to either the bare `feedback` table or the aliased
+// `f`/`c` columns used in the export join.
+function buildFeedbackFilter(
+  status: string,
+  search: string,
+  cols: { status: string; message: string; customerName: string; customerEmail: string; customerId?: string }
+) {
+  const filters: string[] = []
+  const params: any[] = []
+
+  if (status && status !== 'all') {
+    filters.push(`${cols.status} = ?`)
+    params.push(status)
+  }
+  if (search) {
+    const like = `%${search}%`
+    if (cols.customerId) {
+      // List view: subquery against the customers table.
+      filters.push(
+        `(${cols.message} LIKE ? OR ${cols.customerId} IN (SELECT id FROM customers WHERE name LIKE ? OR email LIKE ?))`
+      )
+    } else {
+      // Export view: customer columns are already joined in.
+      filters.push(`(${cols.message} LIKE ? OR ${cols.customerName} LIKE ? OR ${cols.customerEmail} LIKE ?)`)
+    }
+    params.push(like, like, like)
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : ''
+  return { where, params }
+}
+
 app.post('/login', (req: Request, res: Response) => {
   const { email, password } = req.body
   const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
@@ -72,22 +105,17 @@ app.get('/feedback', authenticate, (req: Request, res: Response) => {
     const page = parseInt((req.query.page as string) || '1', 10)
     const offset = page * PAGE_SIZE
 
-    const filters = []
-    if (status !== 'all') {
-      filters.push(`status = '${status}'`)
-    }
-    if (search) {
-      filters.push(
-        `(message LIKE '%${search}%' OR customer_id IN (SELECT id FROM customers WHERE name LIKE '%${search}%' OR email LIKE '%${search}%'))`
-      )
-    }
-    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : ''
+    const { where, params } = buildFeedbackFilter(status, search, {
+      status: 'status',
+      message: 'message',
+      customerName: 'name',
+      customerEmail: 'email',
+      customerId: 'customer_id',
+    })
 
     const rows: any[] = db
-      .prepare(
-        `SELECT * FROM feedback ${where} ORDER BY created_at DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`
-      )
-      .all()
+      .prepare(`SELECT * FROM feedback ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+      .all(...params, PAGE_SIZE, offset)
 
     const items = rows.map(serializeFeedback)
 
@@ -107,19 +135,18 @@ app.get('/users', authenticate, (req: Request, res: Response) => {
 app.get('/metrics', authenticate, (req: Request, res: Response) => {
   const from = (req.query.from as string) || '1970-01-01T00:00:00.000Z'
   const to = (req.query.to as string) || new Date().toISOString()
+  const now = new Date().toISOString()
   const rows: any[] = db
     .prepare(
-      `SELECT status, COUNT(*) as count FROM feedback WHERE created_at >= '${from}' AND created_at <= '${to}' GROUP BY status`
+      `SELECT status, COUNT(*) as count FROM feedback WHERE created_at >= ? AND created_at <= ? GROUP BY status`
     )
-    .all()
+    .all(from, to)
   const urgent: any = db
-    .prepare(`SELECT COUNT(*) as count FROM feedback WHERE priority = 'urgent' AND created_at >= '${from}'`)
-    .get()
+    .prepare(`SELECT COUNT(*) as count FROM feedback WHERE priority = 'urgent' AND created_at >= ?`)
+    .get(from)
   const overdue: any = db
-    .prepare(
-      `SELECT COUNT(*) as count FROM feedback WHERE status = 'open' AND due_at < '${new Date().toISOString()}'`
-    )
-    .get()
+    .prepare(`SELECT COUNT(*) as count FROM feedback WHERE status = 'open' AND due_at < ?`)
+    .get(now)
 
   res.json({
     open: rows.find((row) => row.status === 'open')?.count || 0,
@@ -135,14 +162,12 @@ app.get('/export.csv', (req: Request, res: Response) => {
 
   const status = (req.query.status as string) || 'all'
   const search = ((req.query.q as string) || '').trim()
-  const filters = []
-  if (status !== 'all') {
-    filters.push(`f.status = '${status}'`)
-  }
-  if (search) {
-    filters.push(`(f.message LIKE '%${search}%' OR c.name LIKE '%${search}%' OR c.email LIKE '%${search}%')`)
-  }
-  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : ''
+  const { where, params } = buildFeedbackFilter(status, search, {
+    status: 'f.status',
+    message: 'f.message',
+    customerName: 'c.name',
+    customerEmail: 'c.email',
+  })
 
   const rows: any[] = db
     .prepare(
@@ -154,7 +179,7 @@ app.get('/export.csv', (req: Request, res: Response) => {
        ${where}
        ORDER BY f.created_at DESC`
     )
-    .all()
+    .all(...params)
 
   const header = [
     'id',
@@ -228,8 +253,8 @@ app.post('/feedback/:id/assignment', authenticate, (req: Request, res: Response)
   try {
     const { assignee_id, priority, due_at } = req.body
     db.prepare(
-      `UPDATE feedback SET assignee_id = ${assignee_id || 'NULL'}, priority = '${priority}', due_at = '${due_at}' WHERE id = ${req.params.id}`
-    ).run()
+      `UPDATE feedback SET assignee_id = ?, priority = ?, due_at = ? WHERE id = ?`
+    ).run(assignee_id ?? null, priority, due_at ?? null, req.params.id)
 
     const row: any = db.prepare('SELECT * FROM feedback WHERE id = ?').get(req.params.id)
     if (!row) {
@@ -249,10 +274,10 @@ app.get('/feedback/:id/notes', authenticate, (req: Request, res: Response) => {
       `SELECT n.*, u.name as author_name, u.email as author_email
        FROM feedback_notes n
        LEFT JOIN users u ON u.id = n.author_id
-       WHERE n.feedback_id = ${req.params.id}
+       WHERE n.feedback_id = ?
        ORDER BY n.created_at DESC`
     )
-    .all()
+    .all(req.params.id)
   res.json({ notes })
 })
 
