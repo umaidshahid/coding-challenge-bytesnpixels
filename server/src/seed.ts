@@ -43,6 +43,14 @@ db.exec(`
     is_private INTEGER NOT NULL,
     created_at TEXT NOT NULL
   );
+
+  -- Indexes for the hot query paths. The inbox lists feedback filtered by
+  -- status and ordered by created_at, so a composite covers both; customer
+  -- history and the notes join each filter by a foreign key.
+  CREATE INDEX idx_feedback_status_created ON feedback (status, created_at DESC);
+  CREATE INDEX idx_feedback_created ON feedback (created_at DESC);
+  CREATE INDEX idx_feedback_customer ON feedback (customer_id);
+  CREATE INDEX idx_notes_feedback ON feedback_notes (feedback_id);
 `)
 
 const users = [
