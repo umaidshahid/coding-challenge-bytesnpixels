@@ -1,7 +1,7 @@
 services:
   api:
     build:
-      context: .
+      context: ..
       dockerfile: server/Dockerfile
     environment:
       # Provide a real secret in a .env file or your deployment environment.
@@ -16,7 +16,7 @@ services:
 
   proxy:
     build:
-      context: .
+      context: ..
       dockerfile: web/Dockerfile
     environment:
       # Set to your domain (e.g. pulse.example.com) for automatic HTTPS.

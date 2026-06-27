@@ -61,14 +61,17 @@ Open the web app in your browser and sign in.
 ## Run with Docker
 
 A production-style stack runs the API behind a Caddy reverse proxy that also serves the
-built web app. Caddy proxies `/api/*` to the API, so the app is same-origin.
+built web app. Caddy proxies `/api/*` to the API, so the app is same-origin. The compose
+file and its environment live in `deploy/`.
 
 ```bash
-JWT_SECRET=choose-a-real-secret docker compose up --build
+cp deploy/.env.example deploy/.env   # then edit JWT_SECRET
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Then open http://localhost:8080. The API database is seeded automatically on first boot
-and persisted in the `pulse-data` volume. Useful variables:
+Compose reads `deploy/.env` automatically, so no secrets go on the command line. Then open
+http://localhost:8080. The API database is seeded automatically on first boot and
+persisted in the `pulse-data` volume. Variables (see `deploy/.env.example`):
 
 - `JWT_SECRET` (required) — signing secret for auth tokens.
 - `PROXY_PORT` (default `8080`) — host port for the proxy.
@@ -79,7 +82,7 @@ and persisted in the `pulse-data` volume. Useful variables:
 
 - `server/` — Node + Express + TypeScript API backed by SQLite (`better-sqlite3`).
 - `web/` — React + TypeScript single-page app built with Vite.
-- `docker-compose.yml`, `server/Dockerfile`, `web/Dockerfile` — containerized stack.
+- `deploy/`, `server/Dockerfile`, `web/Dockerfile` — containerized stack and compose config.
 - `.github/workflows/ci.yml` — CI: typecheck, build, test, and publish images to GHCR.
 
 ## Optional: live summaries
