@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express, { Request, Response } from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import { db } from './db'
 import { authenticate, verifyToken, bearerFromHeader, signToken, AuthUser } from './auth'
@@ -17,6 +18,13 @@ const corsOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173')
   .filter(Boolean)
 app.use(cors({ origin: corsOrigins }))
 app.use(express.json({ limit: '100kb' }))
+
+// Rate limiting. A loose global cap, with tighter limits on the two endpoints
+// worth abusing: login (credential brute-force) and summarize (LLM cost).
+const globalLimiter = rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true })
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: true })
+const summarizeLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true })
+app.use(globalLimiter)
 
 const PAGE_SIZE = 10
 
@@ -110,7 +118,7 @@ function buildFeedbackFilter(
   return { where, params }
 }
 
-app.post('/login', async (req: Request, res: Response) => {
+app.post('/login', loginLimiter, async (req: Request, res: Response) => {
   const { email, password } = req.body
   const user: any = db.prepare('SELECT * FROM users WHERE email = ?').get(email)
 
@@ -383,7 +391,7 @@ app.post('/feedback/:id/resolve', authenticate, (req: Request, res: Response) =>
   }
 })
 
-app.post('/summarize', authenticate, async (req: Request, res: Response) => {
+app.post('/summarize', summarizeLimiter, authenticate, async (req: Request, res: Response) => {
   try {
     const { id } = req.body
     const row: any = db.prepare('SELECT * FROM feedback WHERE id = ?').get(id)
