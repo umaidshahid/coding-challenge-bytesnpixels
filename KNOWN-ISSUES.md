@@ -70,8 +70,12 @@ DECISIONS.)
 
 - **Single provider, no resilience.** `summarize` calls OpenAI directly with one attempt.
   I added a timeout, an `response.ok` check, and a length cap, but there is no retry,
-  no streaming, and no per-user cost ceiling. Prompt-injection is mitigated (content is
-  framed as data and truncated) but not eliminated.
+  no streaming, and no per-user cost ceiling.
+- **Prompt injection only partially mitigated.** The customer message is framed as data and
+  truncated, and the summary is only ever displayed (never executed or used to drive an
+  action), so the realistic worst case today is a misleading summary. Not eliminated: no
+  delimiter/role separation of the untrusted text, no instruction-stripping pass, no output
+  check. These become important the moment a summary feeds a decision or an automation.
 
 ## Testing / tooling
 

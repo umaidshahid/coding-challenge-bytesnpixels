@@ -1,55 +1,80 @@
-# CLAUDE.md — Agent Guide & Trail
+# Pulse - Customer Feedback Inbox
 
-This file is both the working agreement I gave my AI agent for this challenge and a record
-of how I drove it. The brief weights "how you direct and review the agent" as much as the
-code, so this is deliberately explicit.
+Small internal tool: users log in, view incoming feedback items, mark them
+resolved, and trigger LLM summarization of a feedback thread.
 
-## How this work was driven
+Stack: React + TypeScript (frontend), Node + Express + TypeScript (backend),
+SQLite (better-sqlite3), OpenAI-compatible LLM endpoint.
 
-1. **Read before writing.** The agent read every source file first and produced a tiered
-   bug inventory (`TASKS.md`) — critical / correctness / hygiene / infrastructure — with a
-   ship-vs-defer call on each item, before any code changed.
-2. **Decisions up front.** Ambiguous calls (private-note visibility, container topology,
-   commit granularity, whether to use Spec Kit) were settled explicitly and recorded in
-   TASKS.md, not left for the agent to guess.
-3. **One task, one commit, one verification.** Each task was implemented, typechecked, and
-   proven with a live request or test before moving on. Commits are Conventional Commits
-   with short subjects.
-4. **Review the agent, don't trust it.** The agent's output was checked against the command
-   CI actually runs, not just "did the test pass."
+This was agent-generated and handed to me to make shippable. Treat every
+assumption the original agent made as suspect until verified.
 
-## Conventions for any future agent working here
+## Commands
 
-- **Verify, don't decode.** Auth uses `jwt.verify` with a secret from `JWT_SECRET`. Never
-  reintroduce `jwt.decode` for auth.
-- **Always parameterize SQL.** Use bound `?` parameters. Never interpolate user input into
-  a query string, even for "internal" endpoints.
-- **Never render untrusted text as HTML.** No `dangerouslySetInnerHTML` on customer or
-  user-supplied content. Render as text.
-- **No secrets in the client bundle.** API keys stay server-side. Nothing sensitive in
-  `VITE_*` vars.
-- **Don't log tokens or request bodies.** Keep error logs to a message + the error object.
-- **One task per commit**, Conventional Commits.
-- **Run the CI commands locally** before claiming done: `npm run typecheck --workspace
-  server`, `npm run build --workspace web`, `npm test --workspace server`.
+```bash
+# Backend
+cd server && npm install && npm run dev   # ts-node / nodemon
+npm run build                             # tsc
+npm test                                  # jest (if tests exist)
 
-## Project map
+# Frontend
+cd client && npm install && npm run dev   # vite
+npm run build
+npm run lint                              # eslint
 
-- `server/` — Express + TypeScript API, SQLite via better-sqlite3, run with `tsx`.
-  - `src/auth.ts` — JWT sign/verify, the `authenticate` middleware.
-  - `src/index.ts` — all routes; exports `app` for tests, listens only when run directly.
-  - `src/db.ts` — opens the DB at `PULSE_DB_PATH` (defaults to a local file).
-  - `src/llm.ts` — summary provider; `FAKE_LLM=true` returns a canned summary offline.
-  - `src/index.test.ts` — smoke tests (node:test + supertest).
-- `web/` — React + TypeScript SPA (Vite). `src/api.ts` is the single fetch layer.
-- `server/Dockerfile`, `web/Dockerfile` (Caddy) — images.
-- `deploy/docker-compose.yml` (pulls GHCR images), `deploy/docker-compose.dev.yml` (builds
-  locally), `deploy/.env.example` — deploy stack and its environment.
-- `.github/workflows/ci.yml` — typecheck, build, test, publish to GHCR.
+# Seed DB
+cd server && npm run seed
+```
 
-## Deliverables for this challenge
+## Project structure (verify on first read)
 
-- `DECISIONS.md` — what changed, what I found, what I deferred, where time went.
-- `KNOWN-ISSUES.md` — what is still broken and the 'when there is more time' plan.
-- `PRODUCT-NOTE.md` — the two-week product call.
-- `TASKS.md` — the working plan the agent executed against (the agent trail).
+```
+/web             React app
+/server          Express
+```
+
+## Environment variables required
+
+```
+JWT_SECRET=
+OPENAI_API_KEY=      # or equivalent
+DATABASE_PATH=./db/pulse.sqlite
+PORT=3001
+```
+
+Startup must fail loudly if JWT_SECRET or the LLM key is missing.
+Do not silently fall back to a default secret.
+
+## Things the original agent likely got wrong - check these first
+
+- Auth: JWT secret probably hardcoded or in .env that is not validated on
+  startup. Check for missing expiry, no refresh, tokens accepted after logout.
+- Error handling: LLM call probably throws raw errors to the client, possibly
+  leaking the API key or upstream error message. Wrap it.
+- SQLite queries: likely raw string concatenation - check for injection.
+  Also check for missing transactions on multi-step writes.
+- No input validation on POST bodies - check every route.
+- Resolve action probably has no ownership check - any user can resolve any item.
+- LLM summarize endpoint: no rate limiting, no timeout, no fallback if the
+  model is slow or down.
+- Frontend: loading and error states likely missing or only on the happy path.
+
+## Constraints I am working within
+
+- Do not change the DB schema in a way that breaks the seed script.
+- Do not add a new runtime dependency without a clear reason. Keep the footprint small.
+- Prefer fixing over replacing. The goal is shippable, not a rewrite.
+- Every route that writes data needs input validation (zod or manual, be consistent).
+- The LLM call must have a timeout and a user-facing error message that does
+  not leak internals.
+- No commits that mix a bug fix with a refactor.
+
+## Commit style
+
+Small, focused commits. One logical change per commit.
+Format: `fix: ...` / `feat: ...` / `refactor: ...` / `chore: ...`
+
+## What I am not fixing in this session
+
+(fill in as you go - things you found, assessed, and chose to leave out of scope.
+This feeds directly into the DECISIONS file.)
